@@ -1,7 +1,7 @@
 ClipBar
 =======
 
-This is a small utility that can be used to generate barcodes in EAN-8, EAN-13, EAN-128, UPC-A and UPC-E encoding w/ all supported suffexes in WMF vector format.
+This is a small utility that can be used to generate barcodes in EAN-8, EAN-13, EAN-128, UPC-A and UPC-E encoding with all supported suffixes in WMF vector format.
 
 You can save the produced barcode in vector WMF file or simply copy it to clipboard and paste it in your word-processor of choice including standard Windows Wordpad or MS Office Word.
 
