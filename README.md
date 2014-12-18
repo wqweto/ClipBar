@@ -10,4 +10,4 @@ ClipBar tries to use following fonts for barcode digits (if enabled):
  - OCR-B 10 BT
  - Arial Narrow
  
-Make sure you have one of these fonts installed or digits will default to using Ariel font and overlap.
+Make sure you have one of these fonts installed or digits will default to using Arial font and risk overlapping somewhat.
