@@ -38,24 +38,13 @@ Public Function InitStdFont() As StdFont
     Set InitStdFont = New StdFont
 End Function
 
-Public Function GetModuleInstance(sModule As String, sInstance As String, Optional sDebugID As String) As String
-
-End Function
-
 Public Function IsOnlyDigits(sText As String) As Boolean
     If LenB(sText) <> 0 Then
         IsOnlyDigits = Not (sText Like "*[!0-9]*")
     End If
 End Function
 
-Public Property Get EmptyVariantArray() As Variant
-    EmptyVariantArray = Array()
-End Property
-
-
 Public Function At(Data As Variant, ByVal Index As Long, Optional Default As String) As String
-    Const FUNC_NAME     As String = "At"
-    
     On Error GoTo EH
     At = Default
     If IsArray(Data) Then

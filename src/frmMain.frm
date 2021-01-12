@@ -1,22 +1,22 @@
 VERSION 5.00
 Begin VB.Form frmMain 
    Caption         =   "ClipBar"
-   ClientHeight    =   4520
-   ClientLeft      =   180
-   ClientTop       =   820
-   ClientWidth     =   5680
+   ClientHeight    =   4524
+   ClientLeft      =   192
+   ClientTop       =   840
+   ClientWidth     =   5676
    Icon            =   "frmMain.frx":0000
    LinkTopic       =   "Form1"
-   ScaleHeight     =   4520
-   ScaleWidth      =   5680
+   ScaleHeight     =   4524
+   ScaleWidth      =   5676
    StartUpPosition =   3  'Windows Default
    Begin VB.PictureBox picBarCode 
       BackColor       =   &H00FFFFFF&
       BorderStyle     =   0  'None
       Height          =   3708
       Left            =   0
-      ScaleHeight     =   3710
-      ScaleWidth      =   5560
+      ScaleHeight     =   3708
+      ScaleWidth      =   5556
       TabIndex        =   1
       TabStop         =   0   'False
       Top             =   504
@@ -33,12 +33,12 @@ Begin VB.Form frmMain
    Begin VB.Label labAbout 
       AutoSize        =   -1  'True
       BackStyle       =   0  'Transparent
-      Caption         =   "ClipBar © 2011-2014 Unicontsoft"
-      Height          =   200
-      Left            =   3190
+      Caption         =   "ClipBar © 2011-2021 Unicontsoft"
+      Height          =   192
+      Left            =   3192
       TabIndex        =   2
-      Top             =   80
-      Width           =   3520
+      Top             =   84
+      Width           =   3516
       WordWrap        =   -1  'True
    End
    Begin VB.Menu mnuMain 
@@ -137,7 +137,6 @@ End Enum
 '=========================================================================
 
 Private Sub Form_Load()
-    Const FUNC_NAME     As String = "Form_Load"
     Dim lIdx            As Long
     Dim vSettings       As Variant
     
@@ -162,7 +161,6 @@ Private Sub Form_Resize()
 End Sub
 
 Private Sub Form_Unload(Cancel As Integer)
-    Const FUNC_NAME     As String = "Form_Unload"
     Dim lIdx            As Long
     Dim vSettings       As Variant
     

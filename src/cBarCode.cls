@@ -11,66 +11,8 @@ Attribute VB_GlobalNameSpace = False
 Attribute VB_Creatable = True
 Attribute VB_PredeclaredId = False
 Attribute VB_Exposed = False
-'=========================================================================
-' $Header: /Dreem/1.5/Src/Common/cBarCode.cls 15    14.11.14 16:55 Wqw $
-'
-'   Dreem Enterprise Project
-'   Copyright (c) 2003-2014 Unicontsoft
-'
-'   BarCode generator
-'
-' $Log: /Dreem/1.5/Src/Common/cBarCode.cls $
-'
-' 15    14.11.14 16:55 Wqw
-' REF: polzwa empty variant array
-'
-' 14    12.11.11 19:23 Wqw
-' REF: chars i back color na ean 128
-'
-' 13    4.07.11 0:08 Wqw
-' REF: kalkulatsiq na laDigitsLength w GetEan128BarCode
-'
-' 12    2.07.11 17:13 Wqw
-' REF: err handling dump-i params
-'
-' 11    31.05.10 14:51 Wqw
-' ADD: Property HangSeparators, ShowDigits, HeightPercent, Function
-' GetBarCode. REF: bql background, wdiga m_clrInvalid ako check digit-a e
-' razlichen
-'
-' 10    4.02.10 19:54 Wqw
-' REF: re-dim s expliciten type
-'
-' 9     13.01.10 14:52 Wqw
-' REF: polzwa InitStdFont
-'
-' 8     3.11.09 17:19 Wqw
-' REF: w debug mode MODULE_NAME sydyrja debug id
-'
-' 7     21.07.09 20:00 Wqw
-' REF: impl instance name
-'
-' 6     17.03.09 17:51 Wqw
-' DEL: dead code
-'
-' 5     7.02.09 1:28 Wqw
-' ADD: Property InvalidColor, CurrentColor. REF: params na GetEanBarCode,
-' GetUpcBarCode
-'
-' 4     27.11.08 12:36 Wqw
-' ADD: GetEan128BarCode
-'
-' 3     5.11.08 10:55 Wqw
-' ADD: impl na pvUpcEBarCode
-'
-' 2     4.09.08 12:28 Wqw
-' REF: awtomatichno si izchislqwa bounding box
-'
-' 1     29.08.08 17:42 Wqw
-' Initial implementation
-'
-'=========================================================================
 Option Explicit
+DefObj A-Z
 Private Const STR_MODULE_NAME As String = "cBarCode"
 
 '=========================================================================
@@ -81,13 +23,14 @@ Private Const WHITE_BRUSH                   As Long = 0
 Private Const DT_CENTER                     As Long = &H1
 Private Const DT_VCENTER                    As Long = &H4
 Private Const DT_SINGLELINE                 As Long = &H20
-Private Const TRANSPARENT                   As Long = 1
+Private Const DT_NOPREFIX                   As Long = &H800
+Private Const BK_TRANSPARENT                As Long = 1
 
 Private Declare Function CreateEnhMetaFile Lib "gdi32" Alias "CreateEnhMetaFileA" (ByVal hdcRef As Long, ByVal lpFileName As String, ByVal lpRect As Long, ByVal lpDescription As String) As Long
 Private Declare Function CloseEnhMetaFile Lib "gdi32" (ByVal hDC As Long) As Long
 Private Declare Function SelectObject Lib "gdi32" (ByVal hDC As Long, ByVal hObject As Long) As Long
 Private Declare Function GetStockObject Lib "gdi32" (ByVal nIndex As Long) As Long
-Private Declare Function OleCreatePictureIndirect Lib "olepro32.dll" (lpPictDesc As PICTDESC, riid As Any, ByVal fPictureOwnsHandle As Long, IPic As IPicture) As Long
+Private Declare Function OleCreatePictureIndirect Lib "oleaut32" (lpPictDesc As PICTDESC, riid As Any, ByVal fPictureOwnsHandle As Long, ipic As IPicture) As Long
 Private Declare Function FillRect Lib "user32" (ByVal hDC As Long, lpRect As RECT, ByVal hBrush As Long) As Long
 Private Declare Function DrawText Lib "user32" Alias "DrawTextA" (ByVal hDC As Long, ByVal lpStr As String, ByVal nCount As Long, lpRect As RECT, ByVal wFormat As Long) As Long
 Private Declare Function SetTextColor Lib "gdi32" (ByVal hDC As Long, ByVal crColor As Long) As Long
@@ -161,6 +104,7 @@ Friend Property Get frInstanceName() As String
     frInstanceName = m_sInstanceName
 End Property
 
+#If DebugMode Then
 Private Property Get MODULE_NAME() As String
     #If DebugMode Then
         MODULE_NAME = GetModuleInstance(STR_MODULE_NAME, frInstanceName, m_sDebugID)
@@ -169,10 +113,20 @@ Private Property Get MODULE_NAME() As String
     #End If
 End Property
 
-Private Sub PrintError(sFunction As String)
-    PushError
-    PopPrintError sFunction, MODULE_NAME
-End Sub
+Private Function PrintError(sFunction As String) As VbMsgBoxResult
+    Dim vErr            As Variant
+
+    PushError vErr
+    PrintError = GApp.HandleOutOfMemory(vErr)
+    If PrintError <> vbRetry Then
+        PopPrintError sFunction, MODULE_NAME, vErr
+    End If
+End Function
+#Else
+Private Function PrintError(sFunction As String) As VbMsgBoxResult
+    Debug.Print "Critical error: " & Err.Description
+End Function
+#End If
 
 '=========================================================================
 ' Methods
@@ -244,7 +198,9 @@ Public Function Init(ByVal lBleed As Long, ByVal bHangSeparators As Boolean, ByV
     Init = True
     Exit Function
 EH:
-    PrintError FUNC_NAME
+    If PrintError(FUNC_NAME) = vbRetry Then
+        Resume
+    End If
     Resume Next
 End Function
 
@@ -261,7 +217,9 @@ Public Function GetBarCode(sCode As String, eType As UcsBarCodeTypeEnum) As StdP
         Set GetBarCode = GetEan128BarCode(sCode)
     Case Else '--- auto
         If IsOnlyDigits(sCode) Then
-            If Len(sCode) > 8 + 2 Then
+            If Len(sCode) = 12 Then
+                Set GetBarCode = GetUpcBarCode(sCode, ucsBctUpcA)
+            ElseIf Len(sCode) > 8 + 2 Then
                 Set GetBarCode = GetEanBarCode(sCode, ucsBctEan13)
             Else
                 Set GetBarCode = GetEanBarCode(sCode, ucsBctEan8)
@@ -272,11 +230,13 @@ Public Function GetBarCode(sCode As String, eType As UcsBarCodeTypeEnum) As StdP
     End Select
     Exit Function
 EH:
-    PrintError FUNC_NAME & "(sCode=" & sCode & ", eType=" & eType & ")"
+    If PrintError(FUNC_NAME & "(sCode=" & sCode & ", eType=" & eType & ")") = vbRetry Then
+        Resume
+    End If
     Resume Next
 End Function
                     
-Public Function GetEanBarCode(sCode As String, Optional eType As UcsBarCodeTypeEnum = ucsBctAuto) As StdPicture
+Public Function GetEanBarCode(sCode As String, Optional BarCodeType As UcsBarCodeTypeEnum = ucsBctAuto) As StdPicture
     Const FUNC_NAME     As String = "GetEanBarCode"
     Dim sBarCode        As String
     Dim sSuffix         As String
@@ -284,31 +244,33 @@ Public Function GetEanBarCode(sCode As String, Optional eType As UcsBarCodeTypeE
     
     On Error GoTo EH
     lSize = Len(sCode)
-    If eType = ucsBctEan13 Or (eType = ucsBctAuto And lSize >= 13 And lSize <= 13 + 5) Then
+    If BarCodeType = ucsBctEan13 Or (BarCodeType = ucsBctAuto And lSize >= 13 And lSize <= 13 + 5) Then
         sBarCode = Left$(sCode, 13)
         sSuffix = Mid$(sCode, 14)
-        eType = ucsBctEan13
-    ElseIf eType = ucsBctEan8 Or (eType = ucsBctAuto And lSize >= 8 And lSize <= 8 + 5) Then
+        BarCodeType = ucsBctEan13
+    ElseIf BarCodeType = ucsBctEan8 Or (BarCodeType = ucsBctAuto And lSize >= 8 And lSize <= 8 + 5) Then
         sBarCode = Left$(sCode, 8)
         sSuffix = Mid$(sCode, 9)
-        eType = ucsBctEan8
+        BarCodeType = ucsBctEan8
     Else
         sBarCode = sCode
-        eType = IIf(Len(sBarCode) > 8, ucsBctEan13, ucsBctEan8)
+        BarCodeType = IIf(Len(sBarCode) > 8, ucsBctEan13, ucsBctEan8)
     End If
-    If eType = ucsBctEan8 Then
+    If BarCodeType = ucsBctEan8 Then
         Set GetEanBarCode = pvEan8BarCode(sBarCode, sSuffix)
-    ElseIf eType = ucsBctEan13 Then
+    ElseIf BarCodeType = ucsBctEan13 Then
         Set GetEanBarCode = pvEan13BarCode(sBarCode, sSuffix)
     End If
     sCode = sBarCode & sSuffix
     Exit Function
 EH:
-    PrintError FUNC_NAME & "(sCode=" & sCode & ", eType=" & eType & ")"
+    If PrintError(FUNC_NAME & "(sCode=" & sCode & ", BarCodeType=" & BarCodeType & ")") = vbRetry Then
+        Resume
+    End If
     Resume Next
 End Function
 
-Public Function GetUpcBarCode(sCode As String, Optional eType As UcsBarCodeTypeEnum = ucsBctAuto) As StdPicture
+Public Function GetUpcBarCode(sCode As String, Optional BarCodeType As UcsBarCodeTypeEnum = ucsBctAuto) As StdPicture
     Const FUNC_NAME     As String = "GetUpcBarCode"
     Dim sBarCode        As String
     Dim sSuffix         As String
@@ -316,35 +278,37 @@ Public Function GetUpcBarCode(sCode As String, Optional eType As UcsBarCodeTypeE
     
     On Error GoTo EH
     lSize = Len(sCode)
-    If eType = ucsBctUpcA Or (eType = ucsBctAuto And lSize = 12 Or lSize = 12 + 2 Or lSize = 12 + 5) Then
+    If BarCodeType = ucsBctUpcA Or (BarCodeType = ucsBctAuto And lSize = 12 Or lSize = 12 + 2 Or lSize = 12 + 5) Then
         sBarCode = Left$(sCode, 12)
         sSuffix = Mid$(sCode, 13)
-        eType = ucsBctUpcA
-    ElseIf eType = ucsBctUpcE Or (eType = ucsBctAuto And lSize = 8 Or lSize = 8 + 2 Or lSize = 8 + 5) Then
+        BarCodeType = ucsBctUpcA
+    ElseIf BarCodeType = ucsBctUpcE Or (BarCodeType = ucsBctAuto And lSize = 8 Or lSize = 8 + 2 Or lSize = 8 + 5) Then
         sBarCode = Left$(sCode, 8)
         sSuffix = Mid$(sCode, 9)
-        eType = ucsBctUpcE
-    ElseIf eType = ucsBctUpcA Or (eType = ucsBctAuto And lSize >= 12 And lSize <= 12 + 5) Then
+        BarCodeType = ucsBctUpcE
+    ElseIf BarCodeType = ucsBctUpcA Or (BarCodeType = ucsBctAuto And lSize >= 12 And lSize <= 12 + 5) Then
         sBarCode = Left$(sCode, 12)
         sSuffix = Mid$(sCode, 13)
-        eType = ucsBctUpcA
-    ElseIf eType = ucsBctUpcE Or (eType = ucsBctAuto And lSize >= 8 And lSize <= 8 + 5) Then
+        BarCodeType = ucsBctUpcA
+    ElseIf BarCodeType = ucsBctUpcE Or (BarCodeType = ucsBctAuto And lSize >= 8 And lSize <= 8 + 5) Then
         sBarCode = Left$(sCode, 8)
         sSuffix = Mid$(sCode, 9)
-        eType = ucsBctUpcE
+        BarCodeType = ucsBctUpcE
     Else
         sBarCode = sCode
-        eType = IIf(Len(sBarCode) > 8, ucsBctUpcA, ucsBctUpcE)
+        BarCodeType = IIf(Len(sBarCode) > 8, ucsBctUpcA, ucsBctUpcE)
     End If
-    If eType = ucsBctUpcE Then
+    If BarCodeType = ucsBctUpcE Then
         Set GetUpcBarCode = pvUpcEBarCode(sBarCode, sSuffix)
-    ElseIf eType = ucsBctUpcA Then
+    ElseIf BarCodeType = ucsBctUpcA Then
         Set GetUpcBarCode = pvUpcABarCode(sBarCode, sSuffix)
     End If
     sCode = sBarCode & sSuffix
     Exit Function
 EH:
-    PrintError FUNC_NAME & "(sCode=" & sBarCode & ", eType=" & eType & ")"
+    If PrintError(FUNC_NAME & "(sCode=" & sBarCode & ", BarCodeType=" & BarCodeType & ")") = vbRetry Then
+        Resume
+    End If
     Resume Next
 End Function
 
@@ -369,7 +333,7 @@ Public Function GetEan128BarCode(sBarCode As String) As StdPicture
     ReDim saEncoding(Len(sBarCode) + 1) As String
     m_clrCurrent = vbBlack
     lStep = 100
-    lPos = 9 * lStep
+    lPos = IIf(m_bShowDigits Or m_bHangSeparators, 9, 2) * lStep
     '--- prepare digits counter
     For lIdx = Len(sBarCode) To 1 Step -1
         If Asc(Mid$(sBarCode, lIdx, 1)) >= &H30 And Asc(Mid$(sBarCode, lIdx, 1)) <= &H39 Then
@@ -446,7 +410,7 @@ Public Function GetEan128BarCode(sBarCode As String) As StdPicture
     lSize = lOutIdx
     lIdx = 1
     lOutIdx = 1
-    pvCreateMeta (53 + 11 * (lSize - 1)) * lStep, 55 * lStep
+    pvCreateMeta (35 + IIf(m_bShowDigits Or m_bHangSeparators, 18, 4) + 11 * (lSize - 1)) * lStep, 55 * lStep
     If saEncoding(lOutIdx) = "B" Then
         pvOutputBars pvGetEan128Bars("STARTB"), lPos, lStep, " " ' , "•"
     Else
@@ -475,7 +439,7 @@ Public Function GetEan128BarCode(sBarCode As String) As StdPicture
         rcLetter.Bottom = m_rcBound.Bottom
         For lIdx = 1 To Len(sBarCode)
             rcLetter.Right = rcLetter.Left + 7 * lStep
-            Call DrawText(m_hDC, Mid$(sBarCode, lIdx, 1), 1, rcLetter, DT_CENTER Or DT_VCENTER Or DT_SINGLELINE)
+            Call DrawText(m_hDC, Mid$(sBarCode, lIdx, 1), 1, rcLetter, DT_CENTER Or DT_VCENTER Or DT_SINGLELINE Or DT_NOPREFIX)
             rcLetter.Left = rcLetter.Right + 0 * lStep
         Next
         Call SelectObject(m_hDC, hPrevFont)
@@ -484,7 +448,9 @@ Public Function GetEan128BarCode(sBarCode As String) As StdPicture
     Set GetEan128BarCode = pvMetaToPicture()
     Exit Function
 EH:
-    PrintError FUNC_NAME & "(sBarCode=" & sBarCode & ")"
+    If PrintError(FUNC_NAME & "(sBarCode=" & sBarCode & ")") = vbRetry Then
+        Resume
+    End If
     Resume Next
 End Function
 
@@ -537,7 +503,9 @@ Private Function pvUpcEBarCode(sBarCode As String, sSuffix As String) As StdPict
     Set pvUpcEBarCode = pvMetaToPicture()
     Exit Function
 EH:
-    PrintError FUNC_NAME
+    If PrintError(FUNC_NAME) = vbRetry Then
+        Resume
+    End If
     Resume Next
 End Function
 
@@ -595,7 +563,9 @@ Private Function pvUpcABarCode(sBarCode As String, sSuffix As String) As StdPict
     Set pvUpcABarCode = pvMetaToPicture()
     Exit Function
 EH:
-    PrintError FUNC_NAME
+    If PrintError(FUNC_NAME) = vbRetry Then
+        Resume
+    End If
     Resume Next
 End Function
 
@@ -649,7 +619,9 @@ Private Function pvEan8BarCode(sBarCode As String, sSuffix As String) As StdPict
     Set pvEan8BarCode = pvMetaToPicture()
     Exit Function
 EH:
-    PrintError FUNC_NAME
+    If PrintError(FUNC_NAME) = vbRetry Then
+        Resume
+    End If
     Resume Next
 End Function
 
@@ -678,7 +650,7 @@ Private Function pvEan13BarCode(sBarCode As String, sSuffix As String) As StdPic
         End If
     End If
     lStep = 100
-    lPos = 11 * lStep
+    lPos = IIf(m_bShowDigits Or m_bHangSeparators, 11, 0) * lStep
     '--- calc check digit
     For lIdx = 1 To 12
         lCheck = lCheck + C_Lng(Mid$(sBarCode, lIdx, 1)) * IIf(lIdx Mod 2 = 1, 1, 3)
@@ -686,7 +658,7 @@ Private Function pvEan13BarCode(sBarCode As String, sSuffix As String) As StdPic
     Mid$(sBarCode, 13, 1) = C_Str((10 - (lCheck Mod 10)) Mod 10)
     m_clrCurrent = IIf(sOrigCode = sBarCode And sOrigSuffix = sSuffix, vbBlack, m_clrInvalid)
     '--- output
-    pvCreateMeta (113 + IIf(LenB(sSuffix) <> 0, 11 + Len(sSuffix) * 9, 0)) * lStep, 55 * lStep
+    pvCreateMeta (95 + IIf(m_bShowDigits Or m_bHangSeparators, 18, 0) + IIf(LenB(sSuffix) <> 0, 11 + Len(sSuffix) * 9, 0)) * lStep, 55 * lStep
     pvOutputBars Empty, 1 * lStep, lStep, Left$(sBarCode, 1)
     pvOutputBars pvGetBars("!"), lPos, lStep
     For lIdx = 1 To 6
@@ -707,7 +679,9 @@ Private Function pvEan13BarCode(sBarCode As String, sSuffix As String) As StdPic
     Set pvEan13BarCode = pvMetaToPicture()
     Exit Function
 EH:
-    PrintError FUNC_NAME
+    If PrintError(FUNC_NAME) = vbRetry Then
+        Resume
+    End If
     Resume Next
 End Function
 
@@ -737,11 +711,13 @@ Private Sub pvOutputSuffix(sSuffix As String, lPos As Long, ByVal lStep As Long)
     Next
     Exit Sub
 EH:
-    PrintError FUNC_NAME
+    If PrintError(FUNC_NAME) = vbRetry Then
+        Resume
+    End If
     Resume Next
 End Sub
 
-Private Function pvGetEan128Bars(sDigit As String, Optional ByVal eType As UcsEan128SystemEnum = ucsEseSystemB) As Variant
+Private Function pvGetEan128Bars(sDigit As String, Optional ByVal BarCodeType As UcsEan128SystemEnum = ucsEseSystemB) As Variant
     Dim sChar           As String
     Dim vResult         As Variant
     Dim lPos            As Long
@@ -760,13 +736,13 @@ Private Function pvGetEan128Bars(sDigit As String, Optional ByVal eType As UcsEa
         sChar = "11010011100"
     ElseIf sDigit = "CODEB" Then
         sChar = "10111101110"
-    ElseIf eType = ucsEseSystemB Then
+    ElseIf BarCodeType = ucsEseSystemB Then
         lCount = InStr(1, STR_EAN128_B_CHARACTERS, sDigit)
         sChar = Mid$(STR_EAN128_SYSTEM, 1 + 11 * lCount, 11)
-    Else ' If eType = ucsEseSystemC Then
+    Else ' If BarCodeType = ucsEseSystemC Then
         sChar = Mid$(STR_EAN128_SYSTEM, 1 + 11 * C_Lng(sDigit), 11)
     End If
-    vResult = EmptyVariantArray
+    vResult = Array()
     lPos = 1
     Do While lPos <= Len(sChar)
         For lIdx = lPos + 1 To Len(sChar)
@@ -781,7 +757,7 @@ Private Function pvGetEan128Bars(sDigit As String, Optional ByVal eType As UcsEa
     pvGetEan128Bars = vResult
 End Function
 
-Private Function pvGetBars(sDigit As String, Optional ByVal eType As UcsEanDigitTypeEnum = ucsEdtLeftOdd) As Variant
+Private Function pvGetBars(sDigit As String, Optional ByVal BarCodeType As UcsEanDigitTypeEnum = ucsEdtLeftOdd) As Variant
     Const FUNC_NAME     As String = "pvGetBars"
     Dim sChar           As String
     Dim vResult         As Variant
@@ -806,13 +782,13 @@ Private Function pvGetBars(sDigit As String, Optional ByVal eType As UcsEanDigit
             sDigit = 0
         End If
         sChar = Split(STR_EAN_CHARACTER_SET, "|")(C_Lng(sDigit))
-        If eType = ucsEdtRight Then
+        If BarCodeType = ucsEdtRight Then
             sChar = Replace(Replace(sChar, "0", "2"), "1", "0")
-        ElseIf eType = ucsEdtLeftEven Then
+        ElseIf BarCodeType = ucsEdtLeftEven Then
             sChar = StrReverse(Replace(Replace(sChar, "0", "2"), "1", "0"))
         End If
     End If
-    vResult = EmptyVariantArray
+    vResult = Array()
     lPos = 1
     Do While lPos <= Len(sChar)
         For lIdx = lPos + 1 To Len(sChar)
@@ -827,14 +803,16 @@ Private Function pvGetBars(sDigit As String, Optional ByVal eType As UcsEanDigit
     pvGetBars = vResult
     Exit Function
 EH:
-    PrintError FUNC_NAME
+    If PrintError(FUNC_NAME) = vbRetry Then
+        Resume
+    End If
     Resume Next
 End Function
 
 Private Sub pvCreateMeta(ByVal lWidth As Long, ByVal lHeight As Long)
     m_hDC = CreateEnhMetaFile(0, vbNullString, 0, vbNullString)
     Call SetTextColor(m_hDC, m_clrCurrent)
-    Call SetBkMode(m_hDC, TRANSPARENT)
+    Call SetBkMode(m_hDC, BK_TRANSPARENT)
     m_rcBound.Right = lWidth
     m_rcBound.Bottom = Round(lHeight * m_dblHeightPercent / 100#)
     Call FillRect(m_hDC, m_rcBound, GetStockObject(WHITE_BRUSH))
@@ -844,8 +822,8 @@ Private Sub pvOutputBars( _
             vBars As Variant, _
             lStart As Long, _
             ByVal lStep As Long, _
-            Optional sDigit As String, _
-            Optional lVertAlign As UcsVertAlignEnum = ucsValBottom)
+            Optional Digit As String, _
+            Optional ByVal VertAlign As UcsVertAlignEnum = ucsValBottom)
     Const FUNC_NAME     As String = "pvOutputBars"
     Dim vElem           As Variant
     Dim rc              As RECT
@@ -856,9 +834,9 @@ Private Sub pvOutputBars( _
     
     On Error GoTo EH
     rc.Top = 1 * lStep
-    If lVertAlign = ucsValCenter Then
+    If VertAlign = ucsValCenter Then
         lBottom = m_rcBound.Bottom - 20 * lStep
-    ElseIf lVertAlign = ucsValTop Then
+    ElseIf VertAlign = ucsValTop Then
         If m_bShowDigits Then
             lBottom = m_rcBound.Bottom - 5 * lStep
         Else
@@ -870,14 +848,14 @@ Private Sub pvOutputBars( _
     ElseIf m_bHangSeparators Then
         lBottom = m_rcBound.Bottom - 5 * lStep
     Else
-        lBottom = m_rcBound.Bottom
+        lBottom = m_rcBound.Bottom - 1 * lStep
     End If
     rcLetter.Left = lStart
     hBrush = CreateSolidBrush(m_clrCurrent)
     If IsArray(vBars) Then
         For Each vElem In vBars
             If vElem > 0 Then
-                If m_bHangSeparators And LenB(sDigit) = 0 And lVertAlign = ucsValBottom Then
+                If m_bHangSeparators And LenB(Digit) = 0 And VertAlign = ucsValBottom Then
                     rc.Bottom = lBottom + 5 * lStep
                 Else
                     rc.Bottom = lBottom
@@ -891,28 +869,30 @@ Private Sub pvOutputBars( _
     Else
         lStart = lStart + 7 * lStep
     End If
-    If m_bShowDigits And LenB(sDigit) <> 0 Then
+    If m_bShowDigits And LenB(Digit) <> 0 Then
         rcLetter.Right = lStart
-        If lVertAlign = ucsValTop Then
+        If VertAlign = ucsValTop Then
             rcLetter.Bottom = rc.Top
         Else
             rcLetter.Top = lBottom - 1 * lStep
             rcLetter.Bottom = m_rcBound.Bottom
         End If
         hPrevFont = SelectObject(m_hDC, m_oFont.hFont)
-        Call DrawText(m_hDC, sDigit, Len(sDigit), rcLetter, DT_CENTER Or DT_VCENTER Or DT_SINGLELINE)
+        Call DrawText(m_hDC, Digit, Len(Digit), rcLetter, DT_CENTER Or DT_VCENTER Or DT_SINGLELINE Or DT_NOPREFIX)
         Call SelectObject(m_hDC, hPrevFont)
     End If
     Call DeleteObject(hBrush)
     Exit Sub
 EH:
-    PrintError FUNC_NAME
+    If PrintError(FUNC_NAME) = vbRetry Then
+        Resume
+    End If
     Resume Next
 End Sub
 
 Private Function pvMetaToPicture() As IPicture
     Dim uDesc           As PICTDESC
-    Dim aGuid(0 To 3)   As Long
+    Dim aGUID(0 To 3)   As Long
     
     '--- fill struct
     With uDesc
@@ -922,12 +902,12 @@ Private Function pvMetaToPicture() As IPicture
     End With
     m_hDC = 0
     '--- Fill in magic IPicture GUID {7BF80980-BF32-101A-8BBB-00AA00300CAB}
-    aGuid(0) = &H7BF80980
-    aGuid(1) = &H101ABF32
-    aGuid(2) = &HAA00BB8B
-    aGuid(3) = &HAB0C3000
+    aGUID(0) = &H7BF80980
+    aGUID(1) = &H101ABF32
+    aGUID(2) = &HAA00BB8B
+    aGUID(3) = &HAB0C3000
     '--- Create picture from bitmap handle
-    Call OleCreatePictureIndirect(uDesc, aGuid(0), True, pvMetaToPicture)
+    Call OleCreatePictureIndirect(uDesc, aGUID(0), True, pvMetaToPicture)
 End Function
 
 Private Function pvLeftDigits(sText As String, ByVal lSize As Long) As String
@@ -945,10 +925,10 @@ End Function
 
 #If DebugMode Then
     Private Sub Class_Initialize()
-        DebugInstanceInit MODULE_NAME, m_sDebugID, Me
+        DebugInstanceInit STR_MODULE_NAME, m_sDebugID, Me
     End Sub
 
     Private Sub Class_Terminate()
-        DebugInstanceTerm MODULE_NAME, m_sDebugID
+        DebugInstanceTerm STR_MODULE_NAME, m_sDebugID
     End Sub
 #End If
