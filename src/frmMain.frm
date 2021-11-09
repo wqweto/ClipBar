@@ -185,7 +185,7 @@ Private Sub mnuFile_Click(Index As Integer)
         End If
     Case ucsMnuCopy
         Clipboard.Clear
-        Clipboard.SetData picBarCode.Picture
+        Clipboard.SetData picBarCode.Picture, vbCFMetafile
         MsgBox "Barcode successfully copied to clipboard", vbExclamation
     Case ucsMnuExit
         Unload Me
